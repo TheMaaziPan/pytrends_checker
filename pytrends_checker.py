@@ -7,7 +7,7 @@ from datetime import datetime
 import re
 
 # Streamlit app title
-st.title("Google Trends Keyword Analyzer with SerpApi")
+st.title("Google Trends Keyword Analyser with SerpApi")
 
 # Input: SerpApi API Key
 api_key = st.sidebar.text_input("Enter your SerpApi API Key", type="password")
@@ -100,13 +100,13 @@ def plot_trends(data):
     st.pyplot(plt)
 
 # Main app logic
-if st.sidebar.button("Analyze Keywords"):
+if st.sidebar.button("Analyse Keywords"):
     if not api_key:
         st.warning("Please enter your SerpApi API Key.")
     elif not keywords:
         st.warning("Please enter at least one keyword.")
     else:
-        st.write("### Analyzing Keywords...")
+        st.write("### Analysing Keywords...")
         try:
             # Fetch and process data for all keywords
             trends_data = process_all_keywords(api_key, keywords, region_code, timeframe)
@@ -127,5 +127,5 @@ st.sidebar.markdown("""
 1. Enter your SerpApi API Key.
 2. Enter your keywords in the text area (one keyword per line).
 3. Select a region from the dropdown menu.
-4. Click the 'Analyze Keywords' button to fetch and visualize the data.
+4. Click the 'Analyse Keywords' button to fetch and visualize the data.
 """)
