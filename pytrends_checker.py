@@ -91,13 +91,8 @@ def process_all_keywords(api_key, keywords, region_code, timeframe):
         data = fetch_trends_data(api_key, keyword, region_code, timeframe)
         if data and "interest_over_time" in data:
             timeline_data = data["interest_over_time"]["timeline_data"]
-            dates = []
-            values = []
-            for entry in timeline_data:
-                date = parse_serpapi_date(entry["date"])
-                if date is not None:  # Only include valid dates
-                    dates.append(date)
-                    values.append(entry["values"][0].get("extracted_value", 0))
+            dates = [parse_serpapi_date(entry["date"]) for entry in timeline_data]
+            values = [entry["values"][0].get("extracted_value", 0) for entry in timeline_data]
             return keyword, pd.Series(values, index=pd.to_datetime(dates))
         return keyword, None
     
@@ -141,17 +136,13 @@ if st.sidebar.button("Analyse Keywords"):
             # Replace NaN values with 0 for better display
             trends_data = trends_data.fillna(0)
 
-            # Reset the index to include dates as a column
-            trends_data_with_dates = trends_data.reset_index()
-            trends_data_with_dates.rename(columns={"index": "Date"}, inplace=True)
-
             # Display weekly search volumes with dates
             st.write("### Weekly Search Volumes")
-            st.dataframe(trends_data_with_dates)
+            st.dataframe(trends_data)
 
-            # Use the table data to build the graph
+            # Plot the trends
             st.write("### Search Demand Over Time")
-            plot_trends(trends_data)  # Use the same DataFrame for the graph
+            plot_trends(trends_data)
         else:
             st.error("No data found. Please check your API key and keywords.")
 
