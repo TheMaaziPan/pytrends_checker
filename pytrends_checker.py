@@ -136,9 +136,11 @@ if st.sidebar.button("Analyse Keywords"):
             # Replace NaN values with 0 for better display
             trends_data = trends_data.fillna(0)
 
+            # Display weekly search volumes with dates
             st.write("### Weekly Search Volumes")
             st.dataframe(trends_data)
 
+            # Plot the trends
             st.write("### Search Demand Over Time")
             plot_trends(trends_data)
         else:
