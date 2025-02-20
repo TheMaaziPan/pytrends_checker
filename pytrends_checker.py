@@ -41,11 +41,11 @@ def parse_serpapi_date(date_str):
         full_date_str = f"{start_date}, {year}"
         return datetime.strptime(full_date_str, "%b %d, %Y")
     except Exception:
-        return None
+        return None  # Return None if parsing fails
 
-# Function to fetch Google Trends data using SerpApi with retry logic
-@st.cache_data  # Cache results to prevent duplicate API calls
-def fetch_trends_data(api_key, keyword, region_code, timeframe, retries=3, delay=2):
+# Function to fetch Google Trends data using SerpApi
+@st.cache_data
+def fetch_trends_data(api_key, keyword, region_code, timeframe):
     url = "https://serpapi.com/search.json"
     params = {
         "engine": "google_trends",
@@ -54,40 +54,50 @@ def fetch_trends_data(api_key, keyword, region_code, timeframe, retries=3, delay
         "date": timeframe,
         "api_key": api_key,
     }
-    for attempt in range(retries):
-        try:
-            response = requests.get(url, params=params)
-            if response.status_code == 200:
-                return response.json()
-            elif response.status_code == 503:
-                time.sleep(delay)
-            else:
-                return None
-        except requests.exceptions.RequestException:
-            return None
+    try:
+        response = requests.get(url, params=params)
+        if response.status_code == 200:
+            return response.json()
+    except requests.exceptions.RequestException:
+        return None
     return None
 
-# Function to process all keywords with multithreading for faster API calls
+# Function to process all keywords with multithreading
 def process_all_keywords(api_key, keywords, region_code, timeframe):
     all_data = {}
-    
+
     def fetch_and_process(keyword):
         data = fetch_trends_data(api_key, keyword, region_code, timeframe)
-        if data and "interest_over_time" in data:
-            timeline_data = data["interest_over_time"]["timeline_data"]
-            dates = [parse_serpapi_date(entry["date"]) for entry in timeline_data]
-            values = [entry["values"][0]["extracted_value"] for entry in timeline_data if "extracted_value" in entry["values"][0]]
+        if not data or "interest_over_time" not in data:
+            return keyword, None
+
+        timeline_data = data["interest_over_time"]["timeline_data"]
+        dates = []
+        values = []
+
+        for entry in timeline_data:
+            parsed_date = parse_serpapi_date(entry["date"])
+            if parsed_date:
+                dates.append(parsed_date)
+                values.append(entry["values"][0]["extracted_value"])
+        
+        if dates and values:
             return keyword, pd.Series(values, index=pd.to_datetime(dates))
         return keyword, None
-    
+
     with concurrent.futures.ThreadPoolExecutor() as executor:
         results = executor.map(fetch_and_process, keywords)
-    
+
     for keyword, series in results:
         if series is not None:
             all_data[keyword] = series
 
-    return pd.DataFrame(all_data)
+    df = pd.DataFrame(all_data)
+
+    # Ensure index is a valid DatetimeIndex
+    df.index = pd.to_datetime(df.index, errors='coerce')
+
+    return df.dropna()  # Drop any rows with invalid dates
 
 # Function to plot trends with Streamlit's built-in chart
 def plot_trends(data):
@@ -115,8 +125,8 @@ if st.sidebar.button("Analyse Keywords"):
 # Instructions
 st.sidebar.markdown("""
 **Instructions:**
-1. Enter your SerpApi API Key.
+1. Enter your MV API Key.
 2. Enter your keywords in the text area (one per line, MAX 100 keywords).
 3. Select a region from the dropdown menu.
-4. Click 'Analyse Keywords' to fetch and visualize data.
+4. Click 'Analyse Keywords' to fetch and visualise data.
 """)
