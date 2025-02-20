@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import requests
 import time
 from datetime import datetime
+import re
 
 # Streamlit app title
 st.title("Google Trends Keyword Analyzer with SerpApi")
@@ -31,11 +32,18 @@ region_code = region_mapping[selected_region]
 # Timeframe for analysis (5 years)
 timeframe = "today 5-y"
 
-# Function to parse SerpApi date format
+# Function to clean and parse SerpApi date format
 def parse_serpapi_date(date_str):
-    # Extract the start date from the range (e.g., "Feb 16-22, 2020" -> "Feb 16, 2020")
-    start_date = date_str.split("-")[0] + date_str.split(",")[-1]
-    return datetime.strptime(start_date, "%b %d, %Y")
+    # Remove non-standard characters (e.g., thin spaces \u2009)
+    cleaned_date_str = re.sub(r"[\u2009\u202F]", " ", date_str)
+    
+    # Extract the start date from the range (e.g., "Feb 16 - 22, 2020" -> "Feb 16, 2020")
+    start_date = cleaned_date_str.split("-")[0].strip()
+    year = cleaned_date_str.split(",")[-1].strip()
+    full_date_str = f"{start_date}, {year}"
+    
+    # Parse the cleaned date string
+    return datetime.strptime(full_date_str, "%b %d, %Y")
 
 # Function to fetch Google Trends data using SerpApi with retry logic
 def fetch_trends_data(api_key, keyword, region_code, timeframe, retries=3, delay=2):
