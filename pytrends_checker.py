@@ -8,10 +8,10 @@ from datetime import datetime
 import re
 
 # Streamlit app title
-st.title("MV Google Trends Keyword Analyser")
+st.title("MV Google Trends Analyser")
 
 # Input: SerpApi API Key
-api_key = st.sidebar.text_input("Enter your SerpApi API Key", type="password")
+api_key = st.sidebar.text_input("Enter your MV API Key", type="password")
 
 # Input: List of keywords
 st.sidebar.header("Input Keywords")
@@ -41,11 +41,11 @@ def parse_serpapi_date(date_str):
         full_date_str = f"{start_date}, {year}"
         return datetime.strptime(full_date_str, "%b %d, %Y")
     except Exception:
-        return None  # Return None if parsing fails
+        return None
 
-# Function to fetch Google Trends data using SerpApi
-@st.cache_data
-def fetch_trends_data(api_key, keyword, region_code, timeframe):
+# Function to fetch Google Trends data using SerpApi with retry logic
+@st.cache_data  # Cache results to prevent duplicate API calls
+def fetch_trends_data(api_key, keyword, region_code, timeframe, retries=3, delay=2):
     url = "https://serpapi.com/search.json"
     params = {
         "engine": "google_trends",
@@ -54,50 +54,40 @@ def fetch_trends_data(api_key, keyword, region_code, timeframe):
         "date": timeframe,
         "api_key": api_key,
     }
-    try:
-        response = requests.get(url, params=params)
-        if response.status_code == 200:
-            return response.json()
-    except requests.exceptions.RequestException:
-        return None
+    for attempt in range(retries):
+        try:
+            response = requests.get(url, params=params)
+            if response.status_code == 200:
+                return response.json()
+            elif response.status_code == 503:
+                time.sleep(delay)
+            else:
+                return None
+        except requests.exceptions.RequestException:
+            return None
     return None
 
-# Function to process all keywords with multithreading
+# Function to process all keywords with multithreading for faster API calls
 def process_all_keywords(api_key, keywords, region_code, timeframe):
     all_data = {}
-
+    
     def fetch_and_process(keyword):
         data = fetch_trends_data(api_key, keyword, region_code, timeframe)
-        if not data or "interest_over_time" not in data:
-            return keyword, None
-
-        timeline_data = data["interest_over_time"]["timeline_data"]
-        dates = []
-        values = []
-
-        for entry in timeline_data:
-            parsed_date = parse_serpapi_date(entry["date"])
-            if parsed_date:
-                dates.append(parsed_date)
-                values.append(entry["values"][0]["extracted_value"])
-        
-        if dates and values:
+        if data and "interest_over_time" in data:
+            timeline_data = data["interest_over_time"]["timeline_data"]
+            dates = [parse_serpapi_date(entry["date"]) for entry in timeline_data]
+            values = [entry["values"][0]["extracted_value"] for entry in timeline_data if "extracted_value" in entry["values"][0]]
             return keyword, pd.Series(values, index=pd.to_datetime(dates))
         return keyword, None
-
+    
     with concurrent.futures.ThreadPoolExecutor() as executor:
         results = executor.map(fetch_and_process, keywords)
-
+    
     for keyword, series in results:
         if series is not None:
             all_data[keyword] = series
 
-    df = pd.DataFrame(all_data)
-
-    # Ensure index is a valid DatetimeIndex
-    df.index = pd.to_datetime(df.index, errors='coerce')
-
-    return df.dropna()  # Drop any rows with invalid dates
+    return pd.DataFrame(all_data)
 
 # Function to plot trends with Streamlit's built-in chart
 def plot_trends(data):
