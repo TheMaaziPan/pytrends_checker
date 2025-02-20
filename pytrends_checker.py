@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 from pytrends.request import TrendReq
+from pytrends.exceptions import ResponseError
+import time
 
 # Initialize pytrends
 pytrends = TrendReq(hl='en-US', tz=360)
@@ -29,11 +31,19 @@ region_code = region_mapping[selected_region]
 # Timeframe for analysis (5 years)
 timeframe = 'today 5-y'
 
-# Function to fetch Google Trends data
-def fetch_trends_data(keywords, region_code):
-    pytrends.build_payload(keywords, timeframe=timeframe, geo=region_code)
-    data = pytrends.interest_over_time()
-    return data
+# Function to fetch Google Trends data with retry logic
+def fetch_trends_data(keywords, region_code, retries=3, delay=2):
+    for attempt in range(retries):
+        try:
+            pytrends.build_payload(keywords, timeframe=timeframe, geo=region_code)
+            data = pytrends.interest_over_time()
+            return data
+        except ResponseError as e:
+            if attempt < retries - 1:  # Don't wait on the last attempt
+                time.sleep(delay)  # Wait before retrying
+                continue
+            else:
+                raise e  # Re-raise the exception if all retries fail
 
 # Function to plot trends
 def plot_trends(data):
@@ -54,7 +64,7 @@ if st.sidebar.button("Analyze Keywords"):
     else:
         st.write("### Analyzing Keywords...")
         try:
-            # Fetch Google Trends data
+            # Fetch Google Trends data with retry logic
             trends_data = fetch_trends_data(keywords, region_code)
             
             # Display weekly search volumes
