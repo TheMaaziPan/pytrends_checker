@@ -125,7 +125,7 @@ if st.sidebar.button("Analyse Keywords"):
 st.sidebar.markdown("""
 **Instructions:**
 1. Enter your SerpApi API Key.
-2. Enter your keywords in the text area (one keyword per line).
+2. Enter your keywords in the text area (one keyword per line, MAX 100 keywords).
 3. Select a region from the dropdown menu.
 4. Click the 'Analyse Keywords' button to fetch and visualise the data.
 """)
