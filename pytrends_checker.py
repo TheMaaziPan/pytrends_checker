@@ -34,14 +34,15 @@ timeframe = "today 5-y"
 
 # Function to clean and parse SerpApi date format
 def parse_serpapi_date(date_str):
-    cleaned_date_str = re.sub(r"[\u2009\u202F]", " ", date_str)
+    cleaned_date_str = re.sub(r"[\u2009\u202F]", " ", date_str)  # Remove thin spaces
     try:
         start_date = cleaned_date_str.split("-")[0].strip()
         year = cleaned_date_str.split(",")[-1].strip()
         full_date_str = f"{start_date}, {year}"
         return datetime.strptime(full_date_str, "%b %d, %Y")
-    except Exception:
-        return None
+    except Exception as e:
+        st.warning(f"Date parsing failed for: {date_str} | Error: {e}")
+        return None  # Return None if parsing fails
 
 # Function to fetch Google Trends data using SerpApi with retry logic
 @st.cache_data  # Cache results to prevent duplicate API calls
@@ -70,24 +71,34 @@ def fetch_trends_data(api_key, keyword, region_code, timeframe, retries=3, delay
 # Function to process all keywords with multithreading for faster API calls
 def process_all_keywords(api_key, keywords, region_code, timeframe):
     all_data = {}
-    
-    def fetch_and_process(keyword):
-        data = fetch_trends_data(api_key, keyword, region_code, timeframe)
-        if data and "interest_over_time" in data:
-            timeline_data = data["interest_over_time"]["timeline_data"]
-            dates = [parse_serpapi_date(entry["date"]) for entry in timeline_data]
-            values = [entry["values"][0]["extracted_value"] for entry in timeline_data if "extracted_value" in entry["values"][0]]
-            return keyword, pd.Series(values, index=pd.to_datetime(dates))
-        return keyword, None
-    
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        results = executor.map(fetch_and_process, keywords)
-    
-    for keyword, series in results:
-        if series is not None:
-            all_data[keyword] = series
 
-    return pd.DataFrame(all_data)
+    for keyword in keywords:
+        data = fetch_trends_data(api_key, keyword, region_code, timeframe)
+        if not data or "interest_over_time" not in data:
+            st.warning(f"No search trend data for '{keyword}'. Try another keyword.")
+            continue  # Skip if no data
+
+        timeline_data = data["interest_over_time"]["timeline_data"]
+        dates, values = [], []
+
+        for entry in timeline_data:
+            parsed_date = parse_serpapi_date(entry["date"])
+            if parsed_date:
+                dates.append(parsed_date)
+                values.append(entry["values"][0]["extracted_value"])
+
+        if dates and values:
+            all_data[keyword] = pd.Series(values, index=pd.to_datetime(dates))
+
+    df = pd.DataFrame(all_data)
+
+    # 🔹 Ensure the index is correctly set as datetime
+    df.index = pd.to_datetime(df.index, errors='coerce')
+    
+    # 🔹 Drop any rows with invalid dates
+    df = df.dropna().sort_index()
+
+    return df
 
 # Function to plot trends with Streamlit's built-in chart
 def plot_trends(data):
