@@ -7,7 +7,7 @@ from datetime import datetime
 import re
 
 # Streamlit app title
-st.title("Google Trends Keyword Analyser with SerpApi")
+st.title("MV Google Trends Keyword Analyser")
 
 # Input: SerpApi API Key
 api_key = st.sidebar.text_input("Enter your SerpApi API Key", type="password")
@@ -127,5 +127,5 @@ st.sidebar.markdown("""
 1. Enter your SerpApi API Key.
 2. Enter your keywords in the text area (one keyword per line).
 3. Select a region from the dropdown menu.
-4. Click the 'Analyse Keywords' button to fetch and visualize the data.
+4. Click the 'Analyse Keywords' button to fetch and visualise the data.
 """)
