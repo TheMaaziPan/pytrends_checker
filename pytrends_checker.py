@@ -91,8 +91,13 @@ def process_all_keywords(api_key, keywords, region_code, timeframe):
         data = fetch_trends_data(api_key, keyword, region_code, timeframe)
         if data and "interest_over_time" in data:
             timeline_data = data["interest_over_time"]["timeline_data"]
-            dates = [parse_serpapi_date(entry["date"]) for entry in timeline_data]
-            values = [entry["values"][0].get("extracted_value", 0) for entry in timeline_data]
+            dates = []
+            values = []
+            for entry in timeline_data:
+                date = parse_serpapi_date(entry["date"])
+                if date is not None:  # Only include valid dates
+                    dates.append(date)
+                    values.append(entry["values"][0].get("extracted_value", 0))
             return keyword, pd.Series(values, index=pd.to_datetime(dates))
         return keyword, None
     
