@@ -3,6 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import requests
 import time
+from datetime import datetime
 
 # Streamlit app title
 st.title("Google Trends Keyword Analyzer with SerpApi")
@@ -30,8 +31,14 @@ region_code = region_mapping[selected_region]
 # Timeframe for analysis (5 years)
 timeframe = "today 5-y"
 
-# Function to fetch Google Trends data using SerpApi
-def fetch_trends_data(api_key, keyword, region_code, timeframe):
+# Function to parse SerpApi date format
+def parse_serpapi_date(date_str):
+    # Extract the start date from the range (e.g., "Feb 16-22, 2020" -> "Feb 16, 2020")
+    start_date = date_str.split("-")[0] + date_str.split(",")[-1]
+    return datetime.strptime(start_date, "%b %d, %Y")
+
+# Function to fetch Google Trends data using SerpApi with retry logic
+def fetch_trends_data(api_key, keyword, region_code, timeframe, retries=3, delay=2):
     url = "https://serpapi.com/search.json"
     params = {
         "engine": "google_trends",
@@ -40,13 +47,23 @@ def fetch_trends_data(api_key, keyword, region_code, timeframe):
         "date": timeframe,
         "api_key": api_key,
     }
-    response = requests.get(url, params=params)
-    if response.status_code == 200:
-        data = response.json()
-        return data
-    else:
-        st.error(f"Failed to fetch data for {keyword}. Status code: {response.status_code}")
-        return None
+    for attempt in range(retries):
+        try:
+            response = requests.get(url, params=params)
+            if response.status_code == 200:
+                data = response.json()
+                return data
+            elif response.status_code == 503:
+                st.warning(f"Server overloaded (503). Retrying {attempt + 1}/{retries}...")
+                time.sleep(delay)  # Wait before retrying
+            else:
+                st.error(f"Failed to fetch data for {keyword}. Status code: {response.status_code}")
+                return None
+        except Exception as e:
+            st.error(f"Error fetching data for {keyword}: {e}")
+            return None
+    st.error(f"Max retries reached for {keyword}. Skipping.")
+    return None
 
 # Function to process all keywords
 def process_all_keywords(api_key, keywords, region_code, timeframe):
@@ -56,7 +73,7 @@ def process_all_keywords(api_key, keywords, region_code, timeframe):
         data = fetch_trends_data(api_key, keyword, region_code, timeframe)
         if data and "interest_over_time" in data:
             timeline_data = data["interest_over_time"]["timeline_data"]
-            dates = [entry["date"] for entry in timeline_data]
+            dates = [parse_serpapi_date(entry["date"]) for entry in timeline_data]
             values = [entry["values"][0]["extracted_value"] for entry in timeline_data]
             all_data[keyword] = pd.Series(values, index=pd.to_datetime(dates))
         time.sleep(1)  # Add a delay to avoid rate limits
