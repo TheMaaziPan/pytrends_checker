@@ -1,15 +1,14 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
-from pytrends.request import TrendReq
-from pytrends.exceptions import ResponseError
+import requests
 import time
 
-# Initialize pytrends
-pytrends = TrendReq(hl='en-US', tz=360)
-
 # Streamlit app title
-st.title("Google Trends Keyword Analyzer")
+st.title("Google Trends Keyword Analyzer with SerpApi")
+
+# Input: SerpApi API Key
+api_key = st.sidebar.text_input("Enter your SerpApi API Key", type="password")
 
 # Input: List of keywords
 st.sidebar.header("Input Keywords")
@@ -29,47 +28,67 @@ selected_region = st.sidebar.selectbox("Choose a region", list(region_mapping.ke
 region_code = region_mapping[selected_region]
 
 # Timeframe for analysis (5 years)
-timeframe = 'today 5-y'
+timeframe = "today 5-y"
 
-# Function to fetch Google Trends data with retry logic
-def fetch_trends_data(keywords, region_code, retries=3, delay=2):
-    for attempt in range(retries):
-        try:
-            pytrends.build_payload(keywords, timeframe=timeframe, geo=region_code)
-            data = pytrends.interest_over_time()
-            return data
-        except ResponseError as e:
-            if attempt < retries - 1:  # Don't wait on the last attempt
-                time.sleep(delay)  # Wait before retrying
-                continue
-            else:
-                raise e  # Re-raise the exception if all retries fail
+# Function to fetch Google Trends data using SerpApi
+def fetch_trends_data(api_key, keyword, region_code, timeframe):
+    url = "https://serpapi.com/search.json"
+    params = {
+        "engine": "google_trends",
+        "q": keyword,
+        "geo": region_code,
+        "date": timeframe,
+        "api_key": api_key,
+    }
+    response = requests.get(url, params=params)
+    if response.status_code == 200:
+        data = response.json()
+        return data
+    else:
+        st.error(f"Failed to fetch data for {keyword}. Status code: {response.status_code}")
+        return None
+
+# Function to process all keywords
+def process_all_keywords(api_key, keywords, region_code, timeframe):
+    all_data = {}
+    for keyword in keywords:
+        st.write(f"Fetching data for: {keyword}")
+        data = fetch_trends_data(api_key, keyword, region_code, timeframe)
+        if data and "interest_over_time" in data:
+            timeline_data = data["interest_over_time"]["timeline_data"]
+            dates = [entry["date"] for entry in timeline_data]
+            values = [entry["values"][0]["extracted_value"] for entry in timeline_data]
+            all_data[keyword] = pd.Series(values, index=pd.to_datetime(dates))
+        time.sleep(1)  # Add a delay to avoid rate limits
+    return pd.DataFrame(all_data)
 
 # Function to plot trends
 def plot_trends(data):
-    plt.figure(figsize=(10, 6))
-    for keyword in keywords:
+    plt.figure(figsize=(12, 6))
+    for keyword in data.columns:
         plt.plot(data.index, data[keyword], label=keyword)
     plt.title(f"Google Trends Search Demand (5-Year View) - {selected_region}")
     plt.xlabel("Date")
     plt.ylabel("Search Interest")
-    plt.legend()
+    plt.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
     plt.grid(True)
     st.pyplot(plt)
 
 # Main app logic
 if st.sidebar.button("Analyze Keywords"):
-    if not keywords:
+    if not api_key:
+        st.warning("Please enter your SerpApi API Key.")
+    elif not keywords:
         st.warning("Please enter at least one keyword.")
     else:
         st.write("### Analyzing Keywords...")
         try:
-            # Fetch Google Trends data with retry logic
-            trends_data = fetch_trends_data(keywords, region_code)
+            # Fetch and process data for all keywords
+            trends_data = process_all_keywords(api_key, keywords, region_code, timeframe)
             
             # Display weekly search volumes
             st.write("### Weekly Search Volumes")
-            st.dataframe(trends_data[keywords])
+            st.dataframe(trends_data)
             
             # Plot the trends
             st.write("### Search Demand Over Time")
@@ -80,7 +99,8 @@ if st.sidebar.button("Analyze Keywords"):
 # Add some instructions
 st.sidebar.markdown("""
 **Instructions:**
-1. Enter your keywords in the text area (one keyword per line).
-2. Select a region from the dropdown menu.
-3. Click the 'Analyze Keywords' button to fetch and visualize the data.
+1. Enter your SerpApi API Key.
+2. Enter your keywords in the text area (one keyword per line).
+3. Select a region from the dropdown menu.
+4. Click the 'Analyze Keywords' button to fetch and visualize the data.
 """)
