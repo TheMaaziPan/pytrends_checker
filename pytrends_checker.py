@@ -3,6 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import requests
 import time
+import concurrent.futures
 from datetime import datetime
 import re
 
@@ -14,7 +15,7 @@ api_key = st.sidebar.text_input("Enter your SerpApi API Key", type="password")
 
 # Input: List of keywords
 st.sidebar.header("Input Keywords")
-keywords = st.sidebar.text_area("Enter keywords (one per line)", "").splitlines()
+keywords = st.sidebar.text_area("Enter keywords (one per line)").splitlines()
 
 # Input: Region selection
 st.sidebar.header("Select Region")
@@ -24,7 +25,6 @@ region_mapping = {
     "United Kingdom": "GB",
     "Germany": "DE",
     "France": "FR",
-    # Add more regions as needed
 }
 selected_region = st.sidebar.selectbox("Choose a region", list(region_mapping.keys()))
 region_code = region_mapping[selected_region]
@@ -34,18 +34,17 @@ timeframe = "today 5-y"
 
 # Function to clean and parse SerpApi date format
 def parse_serpapi_date(date_str):
-    # Remove non-standard characters (e.g., thin spaces \u2009)
     cleaned_date_str = re.sub(r"[\u2009\u202F]", " ", date_str)
-    
-    # Extract the start date from the range (e.g., "Feb 16 - 22, 2020" -> "Feb 16, 2020")
-    start_date = cleaned_date_str.split("-")[0].strip()
-    year = cleaned_date_str.split(",")[-1].strip()
-    full_date_str = f"{start_date}, {year}"
-    
-    # Parse the cleaned date string
-    return datetime.strptime(full_date_str, "%b %d, %Y")
+    try:
+        start_date = cleaned_date_str.split("-")[0].strip()
+        year = cleaned_date_str.split(",")[-1].strip()
+        full_date_str = f"{start_date}, {year}"
+        return datetime.strptime(full_date_str, "%b %d, %Y")
+    except Exception:
+        return None
 
 # Function to fetch Google Trends data using SerpApi with retry logic
+@st.cache_data  # Cache results to prevent duplicate API calls
 def fetch_trends_data(api_key, keyword, region_code, timeframe, retries=3, delay=2):
     url = "https://serpapi.com/search.json"
     params = {
@@ -59,45 +58,40 @@ def fetch_trends_data(api_key, keyword, region_code, timeframe, retries=3, delay
         try:
             response = requests.get(url, params=params)
             if response.status_code == 200:
-                data = response.json()
-                return data
+                return response.json()
             elif response.status_code == 503:
-                st.warning(f"Server overloaded (503). Retrying {attempt + 1}/{retries}...")
-                time.sleep(delay)  # Wait before retrying
+                time.sleep(delay)
             else:
-                st.error(f"Failed to fetch data for {keyword}. Status code: {response.status_code}")
                 return None
-        except Exception as e:
-            st.error(f"Error fetching data for {keyword}: {e}")
+        except requests.exceptions.RequestException:
             return None
-    st.error(f"Max retries reached for {keyword}. Skipping.")
     return None
 
-# Function to process all keywords
+# Function to process all keywords with multithreading for faster API calls
 def process_all_keywords(api_key, keywords, region_code, timeframe):
     all_data = {}
-    for keyword in keywords:
-        st.write(f"Fetching data for: {keyword}")
+    
+    def fetch_and_process(keyword):
         data = fetch_trends_data(api_key, keyword, region_code, timeframe)
         if data and "interest_over_time" in data:
             timeline_data = data["interest_over_time"]["timeline_data"]
             dates = [parse_serpapi_date(entry["date"]) for entry in timeline_data]
-            values = [entry["values"][0]["extracted_value"] for entry in timeline_data]
-            all_data[keyword] = pd.Series(values, index=pd.to_datetime(dates))
-        time.sleep(1)  # Add a delay to avoid rate limits
+            values = [entry["values"][0]["extracted_value"] for entry in timeline_data if "extracted_value" in entry["values"][0]]
+            return keyword, pd.Series(values, index=pd.to_datetime(dates))
+        return keyword, None
+    
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        results = executor.map(fetch_and_process, keywords)
+    
+    for keyword, series in results:
+        if series is not None:
+            all_data[keyword] = series
+
     return pd.DataFrame(all_data)
 
-# Function to plot trends
+# Function to plot trends with Streamlit's built-in chart
 def plot_trends(data):
-    plt.figure(figsize=(12, 6))
-    for keyword in data.columns:
-        plt.plot(data.index, data[keyword], label=keyword)
-    plt.title(f"Google Trends Search Demand (5-Year View) - {selected_region}")
-    plt.xlabel("Date")
-    plt.ylabel("Search Interest")
-    plt.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
-    plt.grid(True)
-    st.pyplot(plt)
+    st.line_chart(data)
 
 # Main app logic
 if st.sidebar.button("Analyse Keywords"):
@@ -106,26 +100,23 @@ if st.sidebar.button("Analyse Keywords"):
     elif not keywords:
         st.warning("Please enter at least one keyword.")
     else:
-        st.write("### Analysing Keywords...")
-        try:
-            # Fetch and process data for all keywords
+        with st.spinner("Fetching data... This may take a moment."):
             trends_data = process_all_keywords(api_key, keywords, region_code, timeframe)
-            
-            # Display weekly search volumes
+
+        if not trends_data.empty:
             st.write("### Weekly Search Volumes")
             st.dataframe(trends_data)
-            
-            # Plot the trends
+
             st.write("### Search Demand Over Time")
             plot_trends(trends_data)
-        except Exception as e:
-            st.error(f"An error occurred: {e}")
+        else:
+            st.error("No data found. Please check your API key and keywords.")
 
-# Add some instructions
+# Instructions
 st.sidebar.markdown("""
 **Instructions:**
 1. Enter your SerpApi API Key.
-2. Enter your keywords in the text area (one keyword per line, MAX 100 keywords).
+2. Enter your keywords in the text area (one per line, MAX 100 keywords).
 3. Select a region from the dropdown menu.
-4. Click the 'Analyse Keywords' button to fetch and visualise the data.
+4. Click 'Analyse Keywords' to fetch and visualize data.
 """)
