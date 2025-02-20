@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
 import requests
 import time
 import concurrent.futures
@@ -15,7 +14,7 @@ api_key = st.sidebar.text_input("Enter your MV API Key", type="password")
 
 # Input: List of keywords
 st.sidebar.header("Input Keywords")
-keywords = st.sidebar.text_area("Enter keywords (one per line)").splitlines()
+keywords = st.sidebar.text_area("Enter keywords (one per line, MAX 100 keywords)").splitlines()
 
 # Input: Region selection
 st.sidebar.header("Select Region")
@@ -34,18 +33,25 @@ timeframe = "today 5-y"
 
 # Function to clean and parse SerpApi date format
 def parse_serpapi_date(date_str):
-    cleaned_date_str = re.sub(r"[\u2009\u202F]", " ", date_str)
+    """
+    Clean and parse the date string returned by SerpApi.
+    """
+    cleaned_date_str = re.sub(r"[\u2009\u202F]", " ", date_str)  # Remove non-standard spaces
     try:
-        start_date = cleaned_date_str.split("-")[0].strip()
-        year = cleaned_date_str.split(",")[-1].strip()
-        full_date_str = f"{start_date}, {year}"
-        return datetime.strptime(full_date_str, "%b %d, %Y")
-    except Exception:
+        start_date = cleaned_date_str.split("-")[0].strip()  # Extract start date
+        year = cleaned_date_str.split(",")[-1].strip()  # Extract year
+        full_date_str = f"{start_date}, {year}"  # Combine into a standard format
+        return datetime.strptime(full_date_str, "%b %d, %Y")  # Parse the date
+    except Exception as e:
+        st.warning(f"Failed to parse date: {date_str}. Error: {e}")
         return None
 
 # Function to fetch Google Trends data using SerpApi with retry logic
 @st.cache_data  # Cache results to prevent duplicate API calls
 def fetch_trends_data(api_key, keyword, region_code, timeframe, retries=3, delay=2):
+    """
+    Fetch Google Trends data for a single keyword using SerpApi.
+    """
     url = "https://serpapi.com/search.json"
     params = {
         "engine": "google_trends",
@@ -60,29 +66,40 @@ def fetch_trends_data(api_key, keyword, region_code, timeframe, retries=3, delay
             if response.status_code == 200:
                 return response.json()
             elif response.status_code == 503:
-                time.sleep(delay)
+                time.sleep(delay)  # Wait before retrying
             else:
+                st.error(f"Failed to fetch data for {keyword}. Status code: {response.status_code}")
                 return None
-        except requests.exceptions.RequestException:
+        except requests.exceptions.RequestException as e:
+            st.error(f"Error fetching data for {keyword}: {e}")
             return None
+    st.error(f"Max retries reached for {keyword}. Skipping.")
     return None
 
 # Function to process all keywords with multithreading for faster API calls
 def process_all_keywords(api_key, keywords, region_code, timeframe):
+    """
+    Process all keywords using multithreading for faster API calls.
+    """
     all_data = {}
     
     def fetch_and_process(keyword):
+        """
+        Fetch and process data for a single keyword.
+        """
         data = fetch_trends_data(api_key, keyword, region_code, timeframe)
         if data and "interest_over_time" in data:
             timeline_data = data["interest_over_time"]["timeline_data"]
             dates = [parse_serpapi_date(entry["date"]) for entry in timeline_data]
-            values = [entry["values"][0]["extracted_value"] for entry in timeline_data if "extracted_value" in entry["values"][0]]
+            values = [entry["values"][0].get("extracted_value", 0) for entry in timeline_data]
             return keyword, pd.Series(values, index=pd.to_datetime(dates))
         return keyword, None
     
+    # Use ThreadPoolExecutor for concurrent API calls
     with concurrent.futures.ThreadPoolExecutor() as executor:
-        results = executor.map(fetch_and_process, keywords)
+        results = list(executor.map(fetch_and_process, keywords))
     
+    # Combine results into a DataFrame
     for keyword, series in results:
         if series is not None:
             all_data[keyword] = series
@@ -91,6 +108,9 @@ def process_all_keywords(api_key, keywords, region_code, timeframe):
 
 # Function to plot trends with Streamlit's built-in chart
 def plot_trends(data):
+    """
+    Plot trends using Streamlit's native line chart.
+    """
     st.line_chart(data)
 
 # Main app logic
