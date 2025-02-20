@@ -5,6 +5,7 @@ import time
 import concurrent.futures
 from datetime import datetime
 import re
+import matplotlib.pyplot as plt
 
 # Streamlit app title
 st.title("MV Google Trends Analyser")
@@ -111,7 +112,6 @@ def plot_trends(data):
     """
     Plot trends using Matplotlib for better control over the graph.
     """
-    import matplotlib.pyplot as plt
     plt.figure(figsize=(12, 6))
     for column in data.columns:
         plt.plot(data.index, data[column], label=column)
