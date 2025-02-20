@@ -106,12 +106,21 @@ def process_all_keywords(api_key, keywords, region_code, timeframe):
 
     return pd.DataFrame(all_data)
 
-# Function to plot trends with Streamlit's built-in chart
+# Function to plot trends with Matplotlib for better control
 def plot_trends(data):
     """
-    Plot trends using Streamlit's native line chart.
+    Plot trends using Matplotlib for better control over the graph.
     """
-    st.line_chart(data)
+    import matplotlib.pyplot as plt
+    plt.figure(figsize=(12, 6))
+    for column in data.columns:
+        plt.plot(data.index, data[column], label=column)
+    plt.title(f"Google Trends Search Demand (5-Year View) - {selected_region}")
+    plt.xlabel("Date")
+    plt.ylabel("Search Interest")
+    plt.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
+    plt.grid(True)
+    st.pyplot(plt)
 
 # Main app logic
 if st.sidebar.button("Analyse Keywords"):
@@ -124,6 +133,9 @@ if st.sidebar.button("Analyse Keywords"):
             trends_data = process_all_keywords(api_key, keywords, region_code, timeframe)
 
         if not trends_data.empty:
+            # Replace NaN values with 0 for better display
+            trends_data = trends_data.fillna(0)
+
             st.write("### Weekly Search Volumes")
             st.dataframe(trends_data)
 
