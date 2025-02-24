@@ -71,7 +71,7 @@ st.markdown(
     body {
         background-color: #05262C;
         font-family: 'Roboto', sans-serif;
-        color: #333333;
+        color: #05262C;
     }
     </style>
     """,
