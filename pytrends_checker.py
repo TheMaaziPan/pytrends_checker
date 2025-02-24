@@ -69,7 +69,7 @@ st.markdown(
         padding: 20px;
         font-size: 0.9rem;
         color: #666;
-        background-color: #05262C;
+        background-color: #FFFFFF;
         margin-top: 20px;
         border-radius: 10px;
     }
