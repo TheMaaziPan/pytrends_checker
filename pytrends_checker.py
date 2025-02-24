@@ -216,6 +216,11 @@ if st.sidebar.button("Analyse Keywords"):
             plot_trends(trends_data)
         else:
             st.error("No data found. Please check your API key and keywords.")
+# Footer
+st.markdown(
+    '<div class="footer">Made with ❤️ by MV</div>',
+    unsafe_allow_html=True,
+)
 
 # Instructions
 st.sidebar.markdown("""
