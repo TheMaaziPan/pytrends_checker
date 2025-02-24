@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import requests
@@ -88,6 +87,11 @@ api_key = st.sidebar.text_input("Enter your MV API Key", type="password")
 st.sidebar.header("Input Keywords")
 keywords = st.sidebar.text_area("Enter keywords (one per line, MAX 100 keywords)").splitlines()
 
+# Limit to 100 keywords
+if len(keywords) > 100:
+    st.warning("You have entered more than 100 keywords. Only the first 100 will be processed.")
+    keywords = keywords[:100]
+
 # Input: Region selection
 st.sidebar.header("Select Region")
 region_mapping = {
@@ -162,8 +166,13 @@ def process_all_keywords(api_key, keywords, region_code, timeframe):
         data = fetch_trends_data(api_key, keyword, region_code, timeframe)
         if data and "interest_over_time" in data:
             timeline_data = data["interest_over_time"]["timeline_data"]
-            dates = [datetime.fromtimestamp(eval(entry.get('timestamp'))).date() for entry in timeline_data]
-            values = [entry["values"][0].get("extracted_value", 0) for entry in timeline_data]
+            dates = []
+            values = []
+            for entry in timeline_data:
+                dates = [datetime.fromtimestamp(eval(entry.get('timestamp'))).date() for entry in timeline_data]
+                if date is not None:  # Only include valid dates
+                    dates.append(date)
+                    values.append(entry["values"][0].get("extracted_value", 0))
             return keyword, pd.Series(values, index=pd.to_datetime(dates))
         return keyword, None
     
@@ -207,15 +216,25 @@ if st.sidebar.button("Analyse Keywords"):
             # Replace NaN values with 0 for better display
             trends_data = trends_data.fillna(0)
 
+            # Reset the index to include dates as a column
+            trends_data_with_dates = trends_data.reset_index()
+            trends_data_with_dates.rename(columns={"index": "Date"}, inplace=True)
+
             # Display weekly search volumes with dates
             st.write("### Weekly Search Volumes")
-            st.dataframe(trends_data)
+            st.dataframe(trends_data_with_dates)
 
-            # Plot the trends
+            # Use the table data to build the graph
             st.write("### Search Demand Over Time")
-            plot_trends(trends_data)
+            plot_trends(trends_data)  # Use the same DataFrame for the graph
         else:
             st.error("No data found. Please check your API key and keywords.")
+
+# Footer
+st.markdown(
+    '<div class="footer">Made by MV</div>',
+    unsafe_allow_html=True,
+)
 
 # Instructions
 st.sidebar.markdown("""
