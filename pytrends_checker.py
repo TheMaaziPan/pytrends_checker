@@ -88,10 +88,6 @@ st.markdown(
 # Streamlit app title
 st.title("MV Google Trends Analyser")
 
-# Add MediaVision logo
-logo_url = "https://www.wearemediavision.com/wp-content/uploads/2021/07/MediaVision-Logo.png"  # Replace with the actual logo URL
-st.sidebar.image(logo_url, use_column_width=True)
-
 # Input: SerpApi API Key
 api_key = st.sidebar.text_input("Enter your MV API Key", type="password")
 
