@@ -12,6 +12,13 @@ import matplotlib.pyplot as plt
 st.markdown(
     """
     <style>
+    /* Set the background color */
+    body {
+        background-color: #05262C;
+        color: #FFFFFF;  /* Set text color to white for better contrast */
+        font-family: 'Roboto', sans-serif;
+    }
+    
     /* Main title styling */
     h1 {
         color: #1A73E8;
