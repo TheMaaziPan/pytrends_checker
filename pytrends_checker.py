@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import requests
@@ -13,34 +14,30 @@ st.markdown(
     <style>
     /* Main title styling */
     h1 {
-        color: #1A73E8;
+        color: #4F8BF9;
         text-align: center;
-        font-family: 'Roboto', sans-serif;
         font-size: 2.5rem;
-        margin-bottom: 20px;
     }
 
     /* Sidebar styling */
     .sidebar .sidebar-content {
-        background-color: #FFFFFF;
+        background-color: #F0F2F6;
         padding: 20px;
         border-radius: 10px;
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
     }
 
     /* Button styling */
     .stButton>button {
-        background-color: #1A73E8;
+        background-color: #4F8BF9;
         color: white;
         border-radius: 5px;
         padding: 10px 20px;
         font-size: 1rem;
         border: none;
-        font-family: 'Roboto', sans-serif;
     }
 
     .stButton>button:hover {
-        background-color: #1557B0;
+        background-color: #3a6bbf;
     }
 
     /* Table styling */
@@ -58,19 +55,9 @@ st.markdown(
     /* Footer styling */
     .footer {
         text-align: center;
-        padding: 20px;
+        padding: 10px;
         font-size: 0.9rem;
         color: #666;
-        background-color: #F8F9FA;
-        margin-top: 20px;
-        border-radius: 10px;
-    }
-
-    /* General body styling */
-    body {
-        background-color: #F8F9FA;
-        font-family: 'Roboto', sans-serif;
-        color: #333333;
     }
     </style>
     """,
@@ -86,11 +73,6 @@ api_key = st.sidebar.text_input("Enter your MV API Key", type="password")
 # Input: List of keywords
 st.sidebar.header("Input Keywords")
 keywords = st.sidebar.text_area("Enter keywords (one per line, MAX 100 keywords)").splitlines()
-
-# Limit to 100 keywords
-if len(keywords) > 100:
-    st.warning("You have entered more than 100 keywords. Only the first 100 will be processed.")
-    keywords = keywords[:100]
 
 # Input: Region selection
 st.sidebar.header("Select Region")
@@ -166,13 +148,8 @@ def process_all_keywords(api_key, keywords, region_code, timeframe):
         data = fetch_trends_data(api_key, keyword, region_code, timeframe)
         if data and "interest_over_time" in data:
             timeline_data = data["interest_over_time"]["timeline_data"]
-            dates = []
-            values = []
-            for entry in timeline_data:
-                dates = [datetime.fromtimestamp(eval(entry.get('timestamp'))).date() for entry in timeline_data]
-                if date is not None:  # Only include valid dates
-                    dates.append(date)
-                    values.append(entry["values"][0].get("extracted_value", 0))
+            dates = [datetime.fromtimestamp(eval(entry.get('timestamp'))).date() for entry in timeline_data]
+            values = [entry["values"][0].get("extracted_value", 0) for entry in timeline_data]
             return keyword, pd.Series(values, index=pd.to_datetime(dates))
         return keyword, None
     
@@ -216,25 +193,15 @@ if st.sidebar.button("Analyse Keywords"):
             # Replace NaN values with 0 for better display
             trends_data = trends_data.fillna(0)
 
-            # Reset the index to include dates as a column
-            trends_data_with_dates = trends_data.reset_index()
-            trends_data_with_dates.rename(columns={"index": "Date"}, inplace=True)
-
             # Display weekly search volumes with dates
             st.write("### Weekly Search Volumes")
-            st.dataframe(trends_data_with_dates)
+            st.dataframe(trends_data)
 
-            # Use the table data to build the graph
+            # Plot the trends
             st.write("### Search Demand Over Time")
-            plot_trends(trends_data)  # Use the same DataFrame for the graph
+            plot_trends(trends_data)
         else:
             st.error("No data found. Please check your API key and keywords.")
-
-# Footer
-st.markdown(
-    '<div class="footer">Made by MV</div>',
-    unsafe_allow_html=True,
-)
 
 # Instructions
 st.sidebar.markdown("""
