@@ -164,7 +164,7 @@ def process_all_keywords(api_key, keywords, region_code, timeframe):
             dates = []
             values = []
             for entry in timeline_data:
-                date = parse_serpapi_date(entry["date"])
+                dates = [datetime.fromtimestamp(eval(entry.get('timestamp'))).date() for entry in timeline_data]
                 if date is not None:  # Only include valid dates
                     dates.append(date)
                     values.append(entry["values"][0].get("extracted_value", 0))
