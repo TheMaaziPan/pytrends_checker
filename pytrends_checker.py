@@ -14,30 +14,34 @@ st.markdown(
     <style>
     /* Main title styling */
     h1 {
-        color: #4F8BF9;
+        color: #1A73E8;
         text-align: center;
+        font-family: 'Roboto', sans-serif;
         font-size: 2.5rem;
+        margin-bottom: 20px;
     }
 
     /* Sidebar styling */
     .sidebar .sidebar-content {
-        background-color: #F0F2F6;
+        background-color: #FFFFFF;
         padding: 20px;
         border-radius: 10px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
     }
 
     /* Button styling */
     .stButton>button {
-        background-color: #4F8BF9;
+        background-color: #1A73E8;
         color: white;
         border-radius: 5px;
         padding: 10px 20px;
         font-size: 1rem;
         border: none;
+        font-family: 'Roboto', sans-serif;
     }
 
     .stButton>button:hover {
-        background-color: #3a6bbf;
+        background-color: #1557B0;
     }
 
     /* Table styling */
@@ -55,9 +59,19 @@ st.markdown(
     /* Footer styling */
     .footer {
         text-align: center;
-        padding: 10px;
+        padding: 20px;
         font-size: 0.9rem;
         color: #666;
+        background-color: #F8F9FA;
+        margin-top: 20px;
+        border-radius: 10px;
+    }
+
+    /* General body styling */
+    body {
+        background-color: #F8F9FA;
+        font-family: 'Roboto', sans-serif;
+        color: #333333;
     }
     </style>
     """,
