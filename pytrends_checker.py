@@ -218,7 +218,7 @@ if st.sidebar.button("Analyse Keywords"):
             st.error("No data found. Please check your API key and keywords.")
 # Footer
 st.markdown(
-    '<div class="footer">Made with ❤️ by MV</div>',
+    '<div class="footer">Made by MediaVision</div>',
     unsafe_allow_html=True,
 )
 
