@@ -227,7 +227,7 @@ if st.sidebar.button("Analyse Keywords"):
 
 # Footer
 st.markdown(
-    '<div class="footer">Made with ❤️ by MV</div>',
+    '<div class="footer">Made by MV</div>',
     unsafe_allow_html=True,
 )
 
