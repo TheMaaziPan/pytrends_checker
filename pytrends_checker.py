@@ -69,7 +69,7 @@ st.markdown(
 
     /* General body styling */
     body {
-        background-color: #F8F9FA;
+        background-color: #05262C;
         font-family: 'Roboto', sans-serif;
         color: #333333;
     }
