@@ -8,6 +8,62 @@ from datetime import datetime
 import re
 import matplotlib.pyplot as plt
 
+# Custom CSS for styling
+st.markdown(
+    """
+    <style>
+    /* Main title styling */
+    h1 {
+        color: #4F8BF9;
+        text-align: center;
+        font-size: 2.5rem;
+    }
+
+    /* Sidebar styling */
+    .sidebar .sidebar-content {
+        background-color: #F0F2F6;
+        padding: 20px;
+        border-radius: 10px;
+    }
+
+    /* Button styling */
+    .stButton>button {
+        background-color: #4F8BF9;
+        color: white;
+        border-radius: 5px;
+        padding: 10px 20px;
+        font-size: 1rem;
+        border: none;
+    }
+
+    .stButton>button:hover {
+        background-color: #3a6bbf;
+    }
+
+    /* Table styling */
+    .stDataFrame {
+        border-radius: 10px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    /* Graph styling */
+    .stPlotlyChart, .stPyplot {
+        border-radius: 10px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    /* Footer styling */
+    .footer {
+        text-align: center;
+        padding: 10px;
+        font-size: 0.9rem;
+        color: #666;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 # Streamlit app title
 st.title("MV Google Trends Analyser")
 
