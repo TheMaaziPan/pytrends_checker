@@ -114,50 +114,71 @@ def fetch_outscraper_data(keywords, region_code, api_key, retries=3, delay=2):
     # Convert region code to Outscraper format if needed
     outscraper_region = region_code.lower() if region_code else "worldwide"
     
-    for attempt in range(retries):
-        try:
-            url = "https://api.outscraper.com/api/v1/google-trends"
-            headers = {
-                "X-API-KEY": api_key,
-                "Content-Type": "application/json"
-            }
-            
-            payload = {
-                "keywords": keywords,
-                "region": outscraper_region,
-                "period": "5y"  # 5 years
-            }
-            
-            response = requests.post(url, headers=headers, json=payload)
-            response.raise_for_status()
-            data = response.json()
-            
-            # Process the Outscraper response into a pandas DataFrame
-            # Note: This will need to be adjusted based on the actual response format from Outscraper
-            results = {}
-            for item in data.get("data", []):
-                time_data = item.get("interest_over_time", [])
-                keyword = item.get("keyword", "unknown")
+    # Create a dictionary to store results for all keywords
+    all_data = {}
+    
+    for keyword in keywords:
+        for attempt in range(retries):
+            try:
+                # Use the correct API endpoint
+                url = "https://api.outscraper.cloud/google-trends"
                 
-                for point in time_data:
-                    date = point.get("date")
-                    value = point.get("value", 0)
+                # Set up parameters according to the Outscraper API documentation
+                params = {
+                    "query": keyword,
+                    "region": outscraper_region,
+                    "period": "5y",  # 5 years
+                    "async": "false"  # Synchronous request
+                }
+                
+                headers = {
+                    "X-API-KEY": api_key
+                }
+                
+                # Make the request
+                response = requests.get(url, params=params, headers=headers)
+                response.raise_for_status()
+                data = response.json()
+                
+                # Process the response
+                # Store the response for this keyword
+                if data and isinstance(data, list) and len(data) > 0:
+                    trend_data = data[0].get('interest_over_time', [])
                     
-                    if date not in results:
-                        results[date] = {}
-                    results[date][keyword] = value
-            
-            df = pd.DataFrame.from_dict(results, orient='index')
-            df.index = pd.to_datetime(df.index)
-            df.sort_index(inplace=True)
-            return df
-            
-        except Exception as e:
-            if attempt < retries - 1:
-                time.sleep(delay)
-                continue
-            else:
-                raise e
+                    # Process each data point
+                    for point in trend_data:
+                        date = point.get('date')
+                        value = point.get('value', 0)
+                        
+                        # Initialize the date in the results dictionary if not present
+                        if date not in all_data:
+                            all_data[date] = {}
+                            
+                        # Add the value for this keyword on this date
+                        all_data[date][keyword] = value
+                
+                # Break the retry loop if successful
+                break
+                
+            except Exception as e:
+                if attempt < retries - 1:
+                    time.sleep(delay)
+                    continue
+                else:
+                    st.error(f"Error fetching data for keyword '{keyword}': {str(e)}")
+                    raise e
+    
+    # Convert the dictionary to a DataFrame
+    if not all_data:
+        raise Exception("No data was returned from the Outscraper API")
+    
+    df = pd.DataFrame.from_dict(all_data, orient='index')
+    
+    # Convert index to datetime and sort
+    df.index = pd.to_datetime(df.index)
+    df.sort_index(inplace=True)
+    
+    return df
 
 # Function to plot trends
 def plot_trends(data):
