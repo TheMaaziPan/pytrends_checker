@@ -1,99 +1,38 @@
-
 import streamlit as st
 import pandas as pd
-import requests
-import time
-import concurrent.futures
-from datetime import datetime
-import re
 import matplotlib.pyplot as plt
+from pytrends.request import TrendReq
+from pytrends.exceptions import ResponseError
+import time
+import requests
+import json
 
-# Custom CSS for styling
-st.markdown(
-    """
-    <style>
-    /* Set the background color */
-    body {
-        background-color: #05262C;
-        color: #FFFFFF;  /* Set text color to white for better contrast */
-        font-family: 'Roboto', sans-serif;
-    }
-    
-    /* Main title styling */
-    h1 {
-        color: #1A73E8;
-        text-align: center;
-        font-family: 'Roboto', sans-serif;
-        font-size: 2.5rem;
-        margin-bottom: 20px;
-    }
-
-    /* Sidebar styling */
-    .sidebar .sidebar-content {
-        background-color: #05262C;
-        padding: 20px;
-        border-radius: 10px;
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-    }
-
-    /* Button styling */
-    .stButton>button {
-        background-color: #1A73E8;
-        color: white;
-        border-radius: 5px;
-        padding: 10px 20px;
-        font-size: 1rem;
-        border: none;
-        font-family: 'Roboto', sans-serif;
-    }
-
-    .stButton>button:hover {
-        background-color: #1557B0;
-    }
-
-    /* Table styling */
-    .stDataFrame {
-        border-radius: 10px;
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-    }
-
-    /* Graph styling */
-    .stPlotlyChart, .stPyplot {
-        border-radius: 10px;
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-    }
-
-    /* Footer styling */
-    .footer {
-        text-align: center;
-        padding: 20px;
-        font-size: 0.9rem;
-        color: #666;
-        background-color: #FFFFFF;
-        margin-top: 20px;
-        border-radius: 10px;
-    }
-
-    /* General body styling */
-    body {
-        background-color: #05262C;
-        font-family: 'Roboto', sans-serif;
-        color: #05262C;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+# Initialize pytrends
+pytrends = TrendReq(hl='en-US', tz=360)
 
 # Streamlit app title
-st.title("MV Google Trends Analyser")
+st.title("Google Trends Keyword Analyzer")
 
-# Input: SerpApi API Key
-api_key = st.sidebar.text_input("Enter your MV API Key", type="password")
+# API Selection and Configuration
+st.sidebar.header("API Selection")
+api_option = st.sidebar.radio(
+    "Select API Source:",
+    ["Google Trends (PyTrends)", "SERP API", "Outscraper"]
+)
+
+# API Key Management
+if api_option == "SERP API":
+    serp_api_key = st.sidebar.text_input("Enter SERP API Key", type="password")
+    if not serp_api_key:
+        st.sidebar.warning("Please enter your SERP API key to use this service.")
+elif api_option == "Outscraper":
+    outscraper_api_key = st.sidebar.text_input("Enter Outscraper API Key", type="password")
+    if not outscraper_api_key:
+        st.sidebar.warning("Please enter your Outscraper API key to use this service.")
 
 # Input: List of keywords
 st.sidebar.header("Input Keywords")
-keywords = st.sidebar.text_area("Enter keywords (one per line, MAX 100 keywords)").splitlines()
+keywords = st.sidebar.text_area("Enter keywords (one per line)", "").splitlines()
 
 # Input: Region selection
 st.sidebar.header("Select Region")
@@ -103,137 +42,176 @@ region_mapping = {
     "United Kingdom": "GB",
     "Germany": "DE",
     "France": "FR",
+    # Add more regions as needed
 }
 selected_region = st.sidebar.selectbox("Choose a region", list(region_mapping.keys()))
 region_code = region_mapping[selected_region]
 
 # Timeframe for analysis (5 years)
-timeframe = "today 5-y"
+timeframe = 'today 5-y'
 
-# Function to clean and parse SerpApi date format
-def parse_serpapi_date(date_str):
-    """
-    Clean and parse the date string returned by SerpApi.
-    """
-    cleaned_date_str = re.sub(r"[\u2009\u202F]", " ", date_str)  # Remove non-standard spaces
-    try:
-        start_date = cleaned_date_str.split("-")[0].strip()  # Extract start date
-        year = cleaned_date_str.split(",")[-1].strip()  # Extract year
-        full_date_str = f"{start_date}, {year}"  # Combine into a standard format
-        return datetime.strptime(full_date_str, "%b %d, %Y")  # Parse the date
-    except Exception as e:
-        st.warning(f"Failed to parse date: {date_str}. Error: {e}")
-        return None
-
-# Function to fetch Google Trends data using SerpApi with retry logic
-@st.cache_data  # Cache results to prevent duplicate API calls
-def fetch_trends_data(api_key, keyword, region_code, timeframe, retries=3, delay=2):
-    """
-    Fetch Google Trends data for a single keyword using SerpApi.
-    """
-    url = "https://serpapi.com/search.json"
-    params = {
-        "engine": "google_trends",
-        "q": keyword,
-        "geo": region_code,
-        "date": timeframe,
-        "api_key": api_key,
-    }
+# Function to fetch Google Trends data with retry logic (PyTrends)
+def fetch_pytrends_data(keywords, region_code, retries=3, delay=2):
     for attempt in range(retries):
         try:
-            response = requests.get(url, params=params)
-            if response.status_code == 200:
-                return response.json()
-            elif response.status_code == 503:
+            pytrends.build_payload(keywords, timeframe=timeframe, geo=region_code)
+            data = pytrends.interest_over_time()
+            return data
+        except ResponseError as e:
+            if attempt < retries - 1:  # Don't wait on the last attempt
                 time.sleep(delay)  # Wait before retrying
+                continue
             else:
-                st.error(f"Failed to fetch data for {keyword}. Status code: {response.status_code}")
-                return None
-        except requests.exceptions.RequestException as e:
-            st.error(f"Error fetching data for {keyword}: {e}")
-            return None
-    st.error(f"Max retries reached for {keyword}. Skipping.")
-    return None
+                raise e  # Re-raise the exception if all retries fail
 
-# Function to process all keywords with multithreading for faster API calls
-def process_all_keywords(api_key, keywords, region_code, timeframe):
-    """
-    Process all keywords using multithreading for faster API calls.
-    """
-    all_data = {}
+# Function to fetch data from SERP API
+def fetch_serp_api_data(keywords, region_code, api_key, retries=3, delay=2):
+    # Convert region code to SERP API format if needed
+    serp_region = region_code.lower() if region_code else "us"  # Default to US if worldwide
     
-    def fetch_and_process(keyword):
-        """
-        Fetch and process data for a single keyword.
-        """
-        data = fetch_trends_data(api_key, keyword, region_code, timeframe)
-        if data and "interest_over_time" in data:
-            timeline_data = data["interest_over_time"]["timeline_data"]
-            dates = [datetime.fromtimestamp(eval(entry.get('timestamp'))).date() for entry in timeline_data]
-            values = [entry["values"][0].get("extracted_value", 0) for entry in timeline_data]
-            return keyword, pd.Series(values, index=pd.to_datetime(dates))
-        return keyword, None
+    results = {}
+    for keyword in keywords:
+        for attempt in range(retries):
+            try:
+                url = "https://serpapi.com/search.json"
+                params = {
+                    "engine": "google_trends",
+                    "q": keyword,
+                    "geo": serp_region,
+                    "data_type": "TIMESERIES",
+                    "api_key": api_key
+                }
+                response = requests.get(url, params=params)
+                response.raise_for_status()  # Raise an exception for 4XX/5XX responses
+                data = response.json()
+                
+                # Extract and store time series data
+                if "interest_over_time" in data:
+                    time_data = data["interest_over_time"]["timeline_data"]
+                    for point in time_data:
+                        date = point["date"]
+                        value = point["values"][0]["value"]
+                        if date not in results:
+                            results[date] = {}
+                        results[date][keyword] = value
+                
+                break  # Break the retry loop if successful
+            except Exception as e:
+                if attempt < retries - 1:
+                    time.sleep(delay)
+                    continue
+                else:
+                    raise e
     
-    # Use ThreadPoolExecutor for concurrent API calls
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        results = list(executor.map(fetch_and_process, keywords))
-    
-    # Combine results into a DataFrame
-    for keyword, series in results:
-        if series is not None:
-            all_data[keyword] = series
+    # Convert the results to a pandas DataFrame
+    df = pd.DataFrame.from_dict(results, orient='index')
+    df.index = pd.to_datetime(df.index)
+    df.sort_index(inplace=True)
+    return df
 
-    return pd.DataFrame(all_data)
+# Function to fetch data from Outscraper API
+def fetch_outscraper_data(keywords, region_code, api_key, retries=3, delay=2):
+    # Convert region code to Outscraper format if needed
+    outscraper_region = region_code.lower() if region_code else "worldwide"
+    
+    for attempt in range(retries):
+        try:
+            url = "https://api.outscraper.com/api/v1/google-trends"
+            headers = {
+                "X-API-KEY": api_key,
+                "Content-Type": "application/json"
+            }
+            
+            payload = {
+                "keywords": keywords,
+                "region": outscraper_region,
+                "period": "5y"  # 5 years
+            }
+            
+            response = requests.post(url, headers=headers, json=payload)
+            response.raise_for_status()
+            data = response.json()
+            
+            # Process the Outscraper response into a pandas DataFrame
+            # Note: This will need to be adjusted based on the actual response format from Outscraper
+            results = {}
+            for item in data.get("data", []):
+                time_data = item.get("interest_over_time", [])
+                keyword = item.get("keyword", "unknown")
+                
+                for point in time_data:
+                    date = point.get("date")
+                    value = point.get("value", 0)
+                    
+                    if date not in results:
+                        results[date] = {}
+                    results[date][keyword] = value
+            
+            df = pd.DataFrame.from_dict(results, orient='index')
+            df.index = pd.to_datetime(df.index)
+            df.sort_index(inplace=True)
+            return df
+            
+        except Exception as e:
+            if attempt < retries - 1:
+                time.sleep(delay)
+                continue
+            else:
+                raise e
 
-# Function to plot trends with Matplotlib for better control
+# Function to plot trends
 def plot_trends(data):
-    """
-    Plot trends using Matplotlib for better control over the graph.
-    """
-    plt.figure(figsize=(12, 6))
-    for column in data.columns:
-        plt.plot(data.index, data[column], label=column)
+    plt.figure(figsize=(10, 6))
+    for keyword in keywords:
+        if keyword in data.columns:
+            plt.plot(data.index, data[keyword], label=keyword)
     plt.title(f"Google Trends Search Demand (5-Year View) - {selected_region}")
     plt.xlabel("Date")
     plt.ylabel("Search Interest")
-    plt.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
+    plt.legend()
     plt.grid(True)
     st.pyplot(plt)
 
 # Main app logic
-if st.sidebar.button("Analyse Keywords"):
-    if not api_key:
-        st.warning("Please enter your SerpApi API Key.")
-    elif not keywords:
+if st.sidebar.button("Analyze Keywords"):
+    if not keywords:
         st.warning("Please enter at least one keyword.")
+    elif api_option == "SERP API" and not serp_api_key:
+        st.error("Please enter your SERP API key to proceed.")
+    elif api_option == "Outscraper" and not outscraper_api_key:
+        st.error("Please enter your Outscraper API key to proceed.")
     else:
-        with st.spinner("Fetching data... This may take a moment."):
-            trends_data = process_all_keywords(api_key, keywords, region_code, timeframe)
-
-        if not trends_data.empty:
-            # Replace NaN values with 0 for better display
-            trends_data = trends_data.fillna(0)
-
-            # Display weekly search volumes with dates
+        st.write(f"### Analyzing Keywords using {api_option}...")
+        try:
+            # Fetch data based on selected API
+            if api_option == "Google Trends (PyTrends)":
+                trends_data = fetch_pytrends_data(keywords, region_code)
+            elif api_option == "SERP API":
+                trends_data = fetch_serp_api_data(keywords, region_code, serp_api_key)
+            elif api_option == "Outscraper":
+                trends_data = fetch_outscraper_data(keywords, region_code, outscraper_api_key)
+            
+            # Display weekly search volumes
             st.write("### Weekly Search Volumes")
-            st.dataframe(trends_data)
-
+            st.dataframe(trends_data[keywords])
+            
             # Plot the trends
             st.write("### Search Demand Over Time")
             plot_trends(trends_data)
-        else:
-            st.error("No data found. Please check your API key and keywords.")
-# Footer
-st.markdown(
-    '<div class="footer">Made by MediaVision</div>',
-    unsafe_allow_html=True,
-)
+            
+            # Add API source information
+            st.info(f"Data source: {api_option}")
+            
+        except Exception as e:
+            st.error(f"An error occurred: {e}")
+            st.info("Please check your API key and try again, or try another API source.")
 
-# Instructions
+# Add some instructions
 st.sidebar.markdown("""
 **Instructions:**
-1. Enter your MV API Key.
-2. Enter your keywords in the text area (one per line, MAX 100 keywords).
-3. Select a region from the dropdown menu.
-4. Click 'Analyse Keywords' to fetch and visualise data.
+1. Select an API source for Google Trends data.
+2. If using SERP API or Outscraper, enter your API key.
+3. Enter your keywords in the text area (one keyword per line).
+4. Select a region from the dropdown menu.
+5. Click the 'Analyze Keywords' button to fetch and visualize the data.
 """)
